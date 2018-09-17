@@ -1,1 +1,186 @@
 
+<?php
+	class img{
+		/*-------------
+		 图片压缩
+		 图片水印
+		 图片文字水印
+		 --------------*/
+		/**
+		 * [textimg 图片文字水印]
+		 * @param  [type]  $src      [文件路径]
+		 * @param  [type]  $filename [新文件名称不需要加后缀]
+		 * @param  [type]  $content  [增加水印的内容]
+		 * @param  integer $unlink   [是否删除原图 0 不删除 1 删除 默认(0)]
+		 * @return [type]            [返回新图片的路径]
+		 */
+		function textimg($src,$filename,$content,$unlink=0){
+			/*打开图片*/  
+			$info = getimagesize($src);  //2.获取图片信息  
+			$type = image_type_to_extension($info[2],false);  //3.通过编号获取图像类型 
+			$fun = "imagecreatefrom".$type;  //4.在内存中创建和图像类型一样的图像  
+			$image = $fun($src);  //5.图片复制到内存
+			/*操作图片*/  
+			$font = "ysyht.ttf";  //1.设置字体的路径 
+			$color = imagecolorallocatealpha($image, 50, 50, 50, 50);  //3.设置字体颜色和透明度
+			// 字体大小  倾斜  距离右侧  距离上方
+			imagettftext($image, 20, 0, 0, 30, $color, $font, $content);  //4.写入文字 
+			/*输出图片*/
+			$fun = "image".$type;
+			$fun($image,$filename.'.'.$type);  //保存图片 
+			/*销毁图片*/  
+			imagedestroy($image);
+			if($unlink!=0){
+				unlink($src);
+			}
+			return $filename.'.'.$type;
+		}
+		/**
+		 * [img_water_mark 图片图片水印]
+		 * @param  [type]  $srcImg   [要增加水印图片路径名称]
+		 * @param  [type]  $waterImg [增加的水印图片]
+		 * @param  [type]  $savepath [将图片修改到的路径]
+		 * @param  [type]  $savename [修改成什么名字]
+		 * @param  integer $positon  [定位到什么位置*1*左上*2*右上*3*居中*4*左下*5*右下]
+		 * @param  integer $alpha    [description]
+		 * @return [type]            [返回文件路径 -1原文件不存在 -2水印图片不存在 -3原图像对象建立失败 -4水印图像对象建立失败]
+		 */
+		function img_water_mark($srcImg, $waterImg, $savepath=null, $savename=null, $positon=1, $alpha=30){
+		    $temp = pathinfo($srcImg);
+		    $name = $temp['basename'];
+		    $path = $temp['dirname'];
+		    $exte = $temp['extension'];
+		    $savename = $savename ? $savename : $name;
+		    $savepath = $savepath ? $savepath : $path;
+		    $savefile = $savepath .'/'. $savename;
+		    $srcinfo = @getimagesize($srcImg);
+		    if (!$srcinfo) { return -1; } 	//原文件不存在
+		    $waterinfo = @getimagesize($waterImg);
+		    if (!$waterinfo){ return -2; } 	//水印图片不存在
+		    $w = $srcinfo[0]/1;			//根据原图压缩水印图片
+		    $h = $srcinfo[1]/1;
+		    $newwater = '123.jpg';			//压缩完成后的文件名
+		    copy($waterImg,$newwater);		//复制出一个新的图片
+		    $res = $this->resize($newwater,$w,$h);  		//生成新的水印图片
+		    $waterinfo = @getimagesize($newwater);
+		    $srcImgObj = $this->create($srcImg);
+		    if (!$srcImgObj) { return -3; } 	//原文件图像对象建立失败
+		    $waterImgObj = $this->create($newwater);
+		    if (!$waterImgObj) { return -4; } 	//水印文件图像对象建立失败
+		    switch ($positon) {
+		    	//1顶部居左
+			    case 1: $x=$y=0; break;
+			    //2顶部居右
+			    case 2: $x = $srcinfo[0]-$waterinfo[0]; $y = 0; break;
+			    //3居中
+			    case 3: $x = ($srcinfo[0]-$waterinfo[0])/2; $y = ($srcinfo[1]-$waterinfo[1])/2; break;
+			    //4底部居左
+			    case 4: $x = 0; $y = $srcinfo[1]-$waterinfo[1]; break;
+			    //5底部居右
+			    case 5: $x = $srcinfo[0]-$waterinfo[0]; $y = $srcinfo[1]-$waterinfo[1]; break;
+			    default: $x=$y=0;
+		    }
+		    imagecopymerge($srcImgObj, $waterImgObj, $x, $y, 0, 0, $waterinfo[0], $waterinfo[1], $alpha);
+		    switch ($srcinfo[2]) {
+			    case 1: imagegif($srcImgObj, $savefile); break;
+			    case 2: imagejpeg($srcImgObj, $savefile); break;
+			    case 3: imagepng($srcImgObj, $savefile); break;
+			    default: return -5; //保存失败
+		    }
+		    unlink($newwater);
+		    imagedestroy($srcImgObj);
+		    imagedestroy($waterImgObj);
+		    return $savefile;
+		}
+		/**
+		 * [create 图像对象建立]
+		 * @param  [type] $src [文件名路径]
+		 * @return [type]      [图像对象]
+		 */
+		function create($src){     
+		    $info=getimagesize($src);
+		    $im=null;  
+		    switch ($info[2]){     
+		        case 1: $im=imagecreatefromgif($src); break;     
+		        case 2: $im=imagecreatefromjpeg($src); break;     
+		        case 3: $im=imagecreatefrompng($src); break;     
+		    }     
+		    return $im;     
+		}
+		/**
+		 * [resize description]
+		 * @param  [type] $src [要压缩图片的路径]
+		 * @param  [type] $w   [宽度]
+		 * @param  [type] $h   [高度]
+		 * @return [type]      [description]
+		 */
+		public function resize($src,$w,$h){ 
+		    $temp=pathinfo($src);     
+		    $name=$temp["basename"];//文件名     
+		    $dir=$temp["dirname"];//文件所在的文件夹     
+		    $extension=$temp["extension"];//文件扩展名     
+		    $savepath="{$dir}/{$name}";//缩略图保存路径,新的文件名为*.thumb.jpg          
+		    $info=getimagesize($src);//获取图片的基本信息
+		    $width=$info[0];//获取图片宽度     
+		    $height=$info[1];//获取图片高度     
+		    $per1=round($width/$height,2);//计算原图长宽比     
+		    $per2=round($w/$h,2);//计算缩略图长宽比     
+		    if($per1>$per2||$per1==$per2){  //计算缩放比例
+		        $per=$w/$width;     //原图长宽比大于或者等于缩略图长宽比，则按照宽度优先
+		    }if($per1<$per2){     //原图长宽比小于缩略图长宽比，则按照高度优先
+		        $per=$h/$height;     
+		    }     
+		    $temp_w=intval($width*$per);//计算原图缩放后的宽度     
+		    $temp_h=intval($height*$per);//计算原图缩放后的高度  
+		    $temp_img=imagecreatetruecolor($temp_w,$temp_h);//创建画布     
+		    $im = $this->create($src); 
+		    imagecopyresampled($temp_img,$im,0,0,0,0,$temp_w,$temp_h,$width,$height);     
+		    if($per1>$per2){     
+		        imagejpeg($temp_img,$savepath, 100);     
+		        imagedestroy($im);     
+		        return $this->addBg($savepath,$w,$h,"w");   //宽度优先，在缩放之后高度不足的情况下补上背景
+		    }if($per1==$per2){     
+		        imagejpeg($temp_img,$savepath, 100);     
+		        imagedestroy($im);     
+		        return $savepath;   //等比缩放      
+		    }if($per1<$per2){     
+		        imagejpeg($temp_img,$savepath, 100);     
+		        imagedestroy($im);     
+		        return $this->addBg($savepath,$w,$h,"h");  //高度优先，在缩放之后宽度不足的情况下补上背景           
+		    }     
+		}
+		/**
+		 * [addBg 添加图片背景]
+		 * @param [type] $src   [图片路径]
+		 * @param [type] $w     [宽]
+		 * @param [type] $h     [高]
+		 * @param string $fisrt [缩放的类型]
+		 */
+		function addBg($src,$w,$h,$fisrt="w"){     
+		    $bg=imagecreatetruecolor($w,$h);     
+		    $white = imagecolorallocate($bg,255,255,255);     
+		    imagefill($bg,0,0,$white);//填充背景     
+		    $info=getimagesize($src);  //获取目标图片信息   
+		    $width=$info[0];//目标图片宽度     
+		    $height=$info[1];//目标图片高度     
+		    $img=$this->create($src);     
+		    if($fisrt=="wh"){  //等比缩放   
+		        return $src;     
+		    }else{     
+		        if($fisrt=="w"){     
+		            $x=0;     
+		            $y=($h-$height)/2;//垂直居中     
+		        }     
+		        if($fisrt=="h"){     
+		            $x=($w-$width)/2;//水平居中     
+		            $y=0;     
+		        }     
+		        imagecopymerge($bg,$img,$x,$y,0,0,$width,$height,100);     
+		        imagejpeg($bg,$src,100);     
+		        imagedestroy($bg);     
+		        imagedestroy($img);     
+		        return $src;     
+		    }
+		}
+	}
+?>
